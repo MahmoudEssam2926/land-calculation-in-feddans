@@ -1,0 +1,1056 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>حاسبة الفدان</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Reem+Kufi:wght@500;600;700&display=swap">
+<style>
+/* Layout: one column "survey sheet": inputs, two result readouts, then a CAD check panel (upload DXF, see the drawing, compare its area with the total). */
+:root {
+  --bg: #EDF0E8;
+  --surface: #F7F9F3;
+  --ink: #14281D;
+  --muted: #55665A;
+  --line: #CFD7C7;
+  --accent: #B97A06;
+  --accent-soft: #F1E2BC;
+  --crop: #2F7D4F;
+  --good: #26703F;
+  --bad: #B3402A;
+  --font-display: "Reem Kufi", "Segoe UI", Tahoma, sans-serif;
+  --font-body: "IBM Plex Sans Arabic", "Segoe UI", Tahoma, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0D1711;
+    --surface: #14221A;
+    --ink: #E5EDDE;
+    --muted: #95A698;
+    --line: #25382B;
+    --accent: #E8B14B;
+    --accent-soft: #3A2E12;
+    --crop: #5DBB82;
+    --good: #6CC790;
+    --bad: #F08A72;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0D1711;
+  --surface: #14221A;
+  --ink: #E5EDDE;
+  --muted: #95A698;
+  --line: #25382B;
+  --accent: #E8B14B;
+  --accent-soft: #3A2E12;
+  --crop: #5DBB82;
+  --good: #6CC790;
+  --bad: #F08A72;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; }
+[hidden] { display: none !important; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.6;
+  padding-block: 28px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.sheet { max-width: 760px; margin-inline: auto; display: grid; gap: 20px; }
+.sheet > * { min-width: 0; }
+
+header { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(2rem, 7vw, 3rem); line-height: 1.1; margin: 0; text-wrap: balance; }
+.sub { color: var(--muted); margin: 6px 0 0; font-size: 0.95rem; }
+.toggle { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px; background: var(--surface); }
+.toggle button { font: inherit; font-size: 0.9rem; border: 0; background: transparent; color: var(--muted); padding: 4px 14px; border-radius: 999px; cursor: pointer; }
+.toggle button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
+.inputs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.field label { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 6px; letter-spacing: 0.02em; }
+.field .unit { font-family: var(--font-display); font-weight: 600; color: var(--ink); font-size: 1.05rem; }
+.stepper { display: grid; grid-template-columns: 34px minmax(0, 1fr) 34px; border: 1.5px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--bg); }
+.stepper:focus-within { border-color: var(--accent); }
+.stepper button { border: 0; background: transparent; color: var(--ink); font-size: 1.25rem; cursor: pointer; line-height: 1; padding: 0; }
+.stepper button:hover { background: var(--accent-soft); }
+.stepper input { width: 100%; min-width: 0; border: 0; background: transparent; color: var(--ink); font: 600 1.4rem var(--font-display); text-align: center; padding: 8px 0; outline: none; font-variant-numeric: tabular-nums; }
+.hint { min-height: 1.5em; margin: 12px 0 0; font-size: 0.88rem; color: var(--muted); }
+.actions { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.link-btn { font: inherit; font-size: 0.88rem; border: 0; background: none; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; padding: 0; }
+
+.results { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.read { background: var(--ink); color: var(--bg); border-radius: 14px; padding: 18px; display: grid; gap: 6px; align-content: start; }
+.read .label { font-size: 0.85rem; opacity: 0.75; }
+.read .value { font-family: var(--font-display); font-weight: 700; font-size: clamp(1.8rem, 6.2vw, 2.6rem); line-height: 1.15; direction: ltr; text-align: right; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.read .u { font-family: var(--font-display); font-weight: 600; color: var(--accent); font-size: 1.1rem; }
+.read .copy { justify-self: start; font: inherit; font-size: 0.82rem; border: 1px solid currentColor; background: transparent; color: inherit; border-radius: 999px; padding: 2px 12px; cursor: pointer; opacity: 0.8; margin-top: 4px; }
+.read .copy:hover { opacity: 1; }
+:root[data-theme="dark"] .read { background: #1E3326; color: #E5EDDE; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .read { background: #1E3326; color: #E5EDDE; } }
+
+h2 { font-family: var(--font-display); font-weight: 600; font-size: 1.25rem; margin: 0 0 4px; }
+.plan-note { color: var(--muted); font-size: 0.9rem; margin: 0 0 14px; }
+
+.controls { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-bottom: 12px; }
+.btn { font: inherit; font-size: 0.92rem; font-weight: 500; border: 0; background: var(--ink); color: var(--bg); padding: 8px 16px; border-radius: 10px; cursor: pointer; display: inline-block; }
+.btn:hover { background: var(--crop); color: var(--bg); }
+.sel-wrap { display: inline-flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--muted); }
+.sel-wrap select { font: inherit; font-size: 0.88rem; color: var(--ink); background: var(--bg); border: 1.5px solid var(--line); border-radius: 8px; padding: 5px 8px; }
+.fname { font-size: 0.85rem; color: var(--muted); overflow-wrap: anywhere; }
+
+.stage { position: relative; border: 1.5px dashed var(--line); border-radius: 12px; background: var(--bg); min-height: 240px; display: grid; place-items: center; overflow: hidden; }
+.stage.drag { border-color: var(--accent); background: var(--accent-soft); }
+.stage.loaded { border-style: solid; }
+.stage .empty { text-align: center; color: var(--muted); padding: 24px; font-size: 0.95rem; }
+.stage .empty strong { display: block; color: var(--ink); font-family: var(--font-display); font-size: 1.15rem; margin-bottom: 4px; }
+.stage svg { width: 100%; height: 340px; display: block; }
+.cad .raw { fill: none; stroke: var(--ink); stroke-width: 1.4; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.cad .shape { fill: none; stroke: none; }
+.cad .shape.on { fill: var(--crop); fill-opacity: 0.3; }
+.cad .shape.on-edge { fill: none; stroke: var(--crop); stroke-width: 2.4; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.cad text { fill: var(--ink); font-family: var(--font-body); paint-order: stroke; stroke: var(--bg); stroke-width: 3px; stroke-linejoin: round; text-anchor: middle; direction: ltr; }
+.msg { margin: 10px 0 0; font-size: 0.88rem; color: var(--muted); white-space: pre-line; }
+.shapes .more { font-size: 0.85rem; color: var(--muted); padding: 2px 10px; }
+.msg.err { color: var(--bad); }
+
+.verdict { margin-top: 14px; border: 1.5px solid var(--line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 10px; }
+.verdict[data-state="good"] { border-color: var(--good); }
+.verdict[data-state="bad"] { border-color: var(--bad); }
+.pill { justify-self: start; font-family: var(--font-display); font-weight: 600; font-size: 1.1rem; padding: 2px 14px; border-radius: 999px; border: 1.5px solid currentColor; }
+.verdict[data-state="good"] .pill { color: var(--good); }
+.verdict[data-state="bad"] .pill { color: var(--bad); }
+.verdict[data-state="idle"] .pill { color: var(--muted); }
+.rows { display: grid; gap: 4px; margin: 0; }
+.rows div { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 0.93rem; }
+.rows dt { color: var(--muted); }
+.rows dd { margin: 0; font-weight: 600; direction: ltr; font-variant-numeric: tabular-nums; }
+.verdict .why { margin: 0; font-size: 0.88rem; color: var(--muted); }
+
+.shapes { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 6px; }
+.shapes label { display: flex; gap: 10px; align-items: center; font-size: 0.9rem; cursor: pointer; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; }
+.shapes input { accent-color: var(--crop); width: 18px; height: 18px; flex: none; }
+.shapes .a { margin-inline-start: auto; font-weight: 600; direction: ltr; font-variant-numeric: tabular-nums; }
+
+.facts { color: var(--muted); font-size: 0.88rem; margin: 0; }
+.facts strong { color: var(--ink); font-weight: 600; }
+
+button:focus-visible, input:focus-visible, select:focus-visible, .btn:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 560px) { .results { grid-template-columns: 1fr; } .panel { padding: 14px; } .stage svg { height: 300px; } }
+.site-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 0.88rem; color: var(--muted); }
+.site-footer a { color: var(--accent); font-weight: 500; text-decoration: underline; text-underline-offset: 3px; }
+.site-footer a:hover { color: var(--ink); }
+</style>
+</head>
+<body>
+<main class="sheet" dir="rtl" lang="ar">
+  <header>
+    <div>
+      <h1>حاسبة الفدان</h1>
+      <p class="sub">أدخل المساحة بالفدان والقيراط والسهم، وشوف الإجمالي بالفدان وبالمتر المربع.</p>
+    </div>
+    <div class="toggle" role="group" aria-label="شكل الأرقام">
+      <button type="button" id="btn-ar" aria-pressed="true">٠١٢</button>
+      <button type="button" id="btn-en" aria-pressed="false">012</button>
+    </div>
+  </header>
+
+  <section class="panel" aria-label="إدخال المساحة">
+    <div class="inputs">
+      <div class="field">
+        <label for="in-f"><span class="unit">فدان</span></label>
+        <div class="stepper"><button type="button" data-step="f" data-d="1" aria-label="زيادة الفدان">+</button><input id="in-f" inputmode="decimal" autocomplete="off" maxlength="12" value="12"><button type="button" data-step="f" data-d="-1" aria-label="إنقاص الفدان">−</button></div>
+      </div>
+      <div class="field">
+        <label for="in-q"><span class="unit">قيراط</span></label>
+        <div class="stepper"><button type="button" data-step="q" data-d="1" aria-label="زيادة القيراط">+</button><input id="in-q" inputmode="decimal" autocomplete="off" maxlength="12" value="8"><button type="button" data-step="q" data-d="-1" aria-label="إنقاص القيراط">−</button></div>
+      </div>
+      <div class="field">
+        <label for="in-s"><span class="unit">سهم</span></label>
+        <div class="stepper"><button type="button" data-step="s" data-d="1" aria-label="زيادة السهم">+</button><input id="in-s" inputmode="decimal" autocomplete="off" maxlength="12" value="15"><button type="button" data-step="s" data-d="-1" aria-label="إنقاص السهم">−</button></div>
+      </div>
+    </div>
+    <div class="actions">
+      <p class="hint" id="hint" aria-live="polite"></p>
+      <button type="button" class="link-btn" id="clear">مسح الكل</button>
+    </div>
+  </section>
+
+  <section class="results" aria-live="polite" aria-label="النتيجة">
+    <div class="read">
+      <span class="label">الإجمالي بالفدان</span>
+      <span class="value" id="out-f">0.0000</span>
+      <span class="u">فدان</span>
+      <button type="button" class="copy" data-copy="f">نسخ الرقم</button>
+    </div>
+    <div class="read">
+      <span class="label">الإجمالي بالمتر المربع</span>
+      <span class="value" id="out-m">0.00</span>
+      <span class="u">متر مربع</span>
+      <button type="button" class="copy" data-copy="m">نسخ الرقم</button>
+    </div>
+  </section>
+
+  <section class="panel" aria-label="مطابقة ملف الكاد">
+    <h2>مطابقة ملف الكاد</h2>
+    <p class="plan-note">ارفع ملف DXF للقطعة، وهيتعرض الرسم وتتحسب مساحته، ونقارنها بالإجمالي بالمتر المربع اللي فوق.</p>
+
+    <div class="controls">
+      <label class="btn" for="file">اختيار ملف DXF</label>
+      <input type="file" id="file" accept=".dxf" hidden>
+      <button type="button" class="link-btn" id="demo">جرّب ملف تجريبي</button>
+      <label class="sel-wrap">وحدة الرسم
+        <select id="unit">
+          <option value="auto">تلقائي</option>
+          <option value="1">متر</option>
+          <option value="0.01">سنتيمتر</option>
+          <option value="0.001">مللي</option>
+          <option value="0.3048">قدم</option>
+          <option value="0.0254">بوصة</option>
+        </select>
+      </label>
+      <label class="sel-wrap">هامش السماح
+        <select id="tol">
+          <option value="0.1">٠٫١٪</option>
+          <option value="0.5" selected>٠٫٥٪</option>
+          <option value="1">١٪</option>
+          <option value="2">٢٪</option>
+        </select>
+      </label>
+      <span class="fname" id="fname"></span>
+    </div>
+
+    <div class="stage" id="stage">
+      <div class="empty" id="empty"><strong>اسحب ملف DXF هنا</strong>أو اضغط "اختيار ملف DXF". يقبل أي إصدار DXF، نصي أو ثنائي.</div>
+    </div>
+    <p class="msg" id="cad-msg" role="status"></p>
+
+    <div class="verdict" id="verdict" data-state="idle" aria-live="polite">
+      <span class="pill" id="pill">في انتظار الملف</span>
+      <dl class="rows">
+        <div><dt>مساحة الكاد</dt><dd id="v-cad">—</dd></div>
+        <div><dt>الإجمالي المُدخل</dt><dd id="v-tot">—</dd></div>
+        <div><dt>الفرق</dt><dd id="v-diff">—</dd></div>
+        <div><dt>مساحة الكاد بالفدان</dt><dd id="v-fed">—</dd></div>
+      </dl>
+      <p class="why" id="v-why"></p>
+      <button type="button" class="btn" id="v-suggest" hidden></button>
+    </div>
+
+    <ul class="shapes" id="shapes"></ul>
+  </section>
+
+  <p class="facts">الفدان = <strong>٢٤ قيراط</strong> والقيراط = <strong>٢٤ سهم</strong>، أي الفدان = ٥٧٦ سهم. الفدان = <strong>٤٢٠٠٫٨٣٣ متر مربع</strong> (٤٢٠٠ + ٥/٦).</p>
+  <footer class="site-footer">
+    <a href="https://mahmoudessam.vercel.app" target="_blank" rel="noopener noreferrer" dir="ltr">Author : Giser. Mahmoud Essam</a>
+  </footer>
+</main>
+
+<script>
+/*PURE-START*/
+var IDENT = [1, 0, 0, 1, 0, 0];
+function mmul(A, B) {
+  return [A[0] * B[0] + A[2] * B[1], A[1] * B[0] + A[3] * B[1], A[0] * B[2] + A[2] * B[3], A[1] * B[2] + A[3] * B[3],
+          A[0] * B[4] + A[2] * B[5] + A[4], A[1] * B[4] + A[3] * B[5] + A[5]];
+}
+function mapply(M, x, y) { return { x: M[0] * x + M[2] * y + M[4], y: M[1] * x + M[3] * y + M[5] }; }
+
+/* OCS -> WCS (arbitrary axis algorithm), projected to the XY plane */
+function ocsMatrix(N) {
+  var nx = N[0], ny = N[1], nz = N[2], len = Math.hypot(nx, ny, nz) || 1;
+  nx /= len; ny /= len; nz /= len;
+  if (Math.abs(nx) < 1e-12 && Math.abs(ny) < 1e-12 && nz > 0) return IDENT;
+  var ax, ay, az;
+  if (Math.abs(nx) < 1 / 64 && Math.abs(ny) < 1 / 64) { ax = nz; ay = 0; az = -nx; }
+  else { ax = -ny; ay = nx; az = 0; }
+  var l = Math.hypot(ax, ay, az) || 1; ax /= l; ay /= l; az /= l;
+  var bx = ny * az - nz * ay, by = nz * ax - nx * az;
+  return [ax, ay, bx, by, 0, 0];
+}
+function getN(e) {
+  var n = [0, 0, 1];
+  e.p.forEach(function (q) {
+    if (q[0] === 210) n[0] = parseFloat(q[1]); else if (q[0] === 220) n[1] = parseFloat(q[1]); else if (q[0] === 230) n[2] = parseFloat(q[1]);
+  });
+  return n;
+}
+
+function parsePairs(text) {
+  var lines = text.replace(/^﻿/, '').split(/\r?\n/), pairs = [], i = 0;
+  while (i + 1 < lines.length) {
+    var c = parseInt(lines[i].trim(), 10);
+    if (isNaN(c)) { i++; continue; }
+    pairs.push([c, lines[i + 1].trim()]); i += 2;
+  }
+  return pairs;
+}
+
+function binType(c) {
+  if (c <= 9) return 'str';
+  if (c <= 59) return 'dbl';
+  if (c <= 79) return 'i16';
+  if (c <= 99) return 'i32';
+  if (c === 100 || c === 102 || c === 105) return 'str';
+  if (c >= 110 && c <= 149) return 'dbl';
+  if (c >= 160 && c <= 169) return 'i64';
+  if (c >= 170 && c <= 179) return 'i16';
+  if (c >= 210 && c <= 239) return 'dbl';
+  if (c >= 270 && c <= 289) return 'i16';
+  if (c >= 290 && c <= 299) return 'bool';
+  if (c >= 300 && c <= 309) return 'str';
+  if (c >= 310 && c <= 319) return 'chunk';
+  if (c >= 320 && c <= 369) return 'str';
+  if (c >= 370 && c <= 389) return 'i16';
+  if (c >= 390 && c <= 399) return 'str';
+  if (c >= 400 && c <= 409) return 'i16';
+  if (c >= 410 && c <= 419) return 'str';
+  if (c >= 420 && c <= 429) return 'i32';
+  if (c >= 430 && c <= 439) return 'str';
+  if (c >= 440 && c <= 459) return 'i32';
+  if (c >= 460 && c <= 469) return 'dbl';
+  if (c >= 470 && c <= 481) return 'str';
+  if (c >= 999 && c <= 1003) return 'str';
+  if (c === 1004) return 'chunk';
+  if (c === 1005) return 'str';
+  if (c >= 1010 && c <= 1059) return 'dbl';
+  if (c >= 1060 && c <= 1070) return 'i16';
+  if (c === 1071) return 'i32';
+  throw new Error('bincode');
+}
+function readBinary(buf) {
+  var dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+  var pos = 22, n = buf.length, two = buf[23] === 0, pairs = [];
+  function str() { var s = ''; while (pos < n && buf[pos] !== 0) s += String.fromCharCode(buf[pos++]); pos++; return s; }
+  while (pos < n) {
+    var c;
+    if (two) { c = dv.getUint16(pos, true); pos += 2; }
+    else { c = buf[pos++]; if (c === 255) { c = dv.getUint16(pos, true); pos += 2; } }
+    var t = binType(c), v;
+    if (t === 'str') v = str();
+    else if (t === 'dbl') { v = dv.getFloat64(pos, true); pos += 8; }
+    else if (t === 'i16') { v = dv.getInt16(pos, true); pos += 2; }
+    else if (t === 'i32') { v = dv.getInt32(pos, true); pos += 4; }
+    else if (t === 'i64') { v = dv.getInt32(pos, true); pos += 8; }
+    else if (t === 'bool') { v = buf[pos++]; }
+    else { var len = buf[pos++]; pos += len; v = ''; }
+    pairs.push([c, v]);
+    if (c === 0 && v === 'EOF') break;
+  }
+  return pairs;
+}
+
+function bulgeSeg(a, b) {
+  var d = Math.hypot(b.x - a.x, b.y - a.y), bb = a.b;
+  if (!bb || !d) return 0;
+  var th = 4 * Math.atan(Math.abs(bb)), r = d * (1 + bb * bb) / (4 * Math.abs(bb));
+  var seg = (r * r / 2) * (th - Math.sin(th));
+  return bb > 0 ? seg : -seg;
+}
+function polyArea(v) {
+  var n = v.length, ox = v[0].x, oy = v[0].y, A = 0, S = 0;
+  for (var i = 0; i < n; i++) {
+    var a = v[i], b = v[(i + 1) % n];
+    A += (a.x - ox) * (b.y - oy) - (b.x - ox) * (a.y - oy);
+    S += bulgeSeg(a, b);
+  }
+  return Math.abs(A / 2 + S);
+}
+function tessellate(verts, closed) {
+  var out = [], n = verts.length, cnt = closed ? n : n - 1;
+  for (var i = 0; i < cnt; i++) {
+    var a = verts[i], b = verts[(i + 1) % n];
+    out.push({ x: a.x, y: a.y, b: 0 });
+    if (a.b) {
+      var dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy), bb = a.b;
+      if (d > 0) {
+        var off = (d / 2) * (1 - bb * bb) / (2 * bb);
+        var cx = a.x + dx / 2 + (-dy / d) * off, cy = a.y + dy / 2 + (dx / d) * off;
+        var th = 4 * Math.atan(bb), a0 = Math.atan2(a.y - cy, a.x - cx);
+        var steps = Math.max(2, Math.ceil(Math.abs(th) / (Math.PI / 90))), r = Math.hypot(a.x - cx, a.y - cy);
+        for (var k = 1; k < steps; k++) {
+          var ang = a0 + th * k / steps;
+          out.push({ x: cx + r * Math.cos(ang), y: cy + r * Math.sin(ang), b: 0 });
+        }
+      }
+    }
+  }
+  if (!closed) out.push({ x: verts[n - 1].x, y: verts[n - 1].y, b: 0 });
+  return out;
+}
+
+function chainLoops(segs, tol) {
+  var key = function (p) { return Math.round(p.x / tol) + ',' + Math.round(p.y / tol); };
+  var map = {};
+  segs.forEach(function (s, i) {
+    [s.a, s.b].forEach(function (p) { var k = key(p); (map[k] = map[k] || []).push(i); });
+  });
+  var used = segs.map(function () { return false; }), loops = [];
+  for (var i = 0; i < segs.length; i++) {
+    if (used[i]) continue;
+    used[i] = true;
+    var chain = [i];
+    var s0 = segs[i], verts = [{ x: s0.a.x, y: s0.a.y, b: s0.bulge || 0 }];
+    var startK = key(s0.a), curK = key(s0.b), curP = s0.b, ok = false, guard = 0;
+    while (guard++ <= segs.length) {
+      if (curK === startK) { ok = true; break; }
+      var cand = (map[curK] || []).filter(function (j) { return !used[j]; });
+      if (!cand.length) break;
+      var j = cand[0]; used[j] = true; chain.push(j);
+      var s = segs[j], fwd = key(s.a) === curK;
+      verts.push({ x: curP.x, y: curP.y, b: fwd ? (s.bulge || 0) : -(s.bulge || 0) });
+      curP = fwd ? s.b : s.a; curK = key(curP);
+    }
+    if (ok && verts.length >= 2) { loops.push(verts); }
+    else { chain.forEach(function (j) { used[j] = false; }); used[i] = true; }
+  }
+  return loops;
+}
+function tolOf(segs) {
+  var mnx = Infinity, mny = Infinity, mxx = -Infinity, mxy = -Infinity;
+  segs.forEach(function (s) { [s.a, s.b].forEach(function (p) { mnx = Math.min(mnx, p.x); mxx = Math.max(mxx, p.x); mny = Math.min(mny, p.y); mxy = Math.max(mxy, p.y); }); });
+  return Math.max(Math.hypot(mxx - mnx, mxy - mny) * 1e-7, 1e-9);
+}
+
+function evalNurbs(deg, knots, ctrl, w, t) {
+  var n = ctrl.length, k = -1, i, j, r;
+  for (i = deg; i < n; i++) { if (t >= knots[i] && t < knots[i + 1]) { k = i; break; } }
+  if (k < 0) k = n - 1;
+  var d = [];
+  for (j = 0; j <= deg; j++) { var idx = j + k - deg; d.push([ctrl[idx].x * w[idx], ctrl[idx].y * w[idx], w[idx]]); }
+  for (r = 1; r <= deg; r++) {
+    for (j = deg; j >= r; j--) {
+      var left = knots[j + k - deg], right = knots[j + 1 + k - r], den = right - left;
+      var al = den ? (t - left) / den : 0;
+      d[j] = [(1 - al) * d[j - 1][0] + al * d[j][0], (1 - al) * d[j - 1][1] + al * d[j][1], (1 - al) * d[j - 1][2] + al * d[j][2]];
+    }
+  }
+  return { x: d[deg][0] / d[deg][2], y: d[deg][1] / d[deg][2] };
+}
+
+function buildDxf(pairs) {
+  var n = pairs.length, i, units = 0;
+  for (i = 0; i < n - 1; i++) {
+    if (pairs[i][0] === 9 && pairs[i][1] === '$INSUNITS' && pairs[i + 1][0] === 70) { units = parseInt(pairs[i + 1][1], 10) || 0; break; }
+  }
+  var sections = {}, cur = null;
+  for (i = 0; i < n - 1; i++) {
+    if (pairs[i][0] === 0 && pairs[i][1] === 'SECTION' && pairs[i + 1][0] === 2) { cur = { from: i + 2 }; sections[pairs[i + 1][1]] = cur; }
+    else if (pairs[i][0] === 0 && pairs[i][1] === 'ENDSEC' && cur) { cur.to = i; cur = null; }
+  }
+  if (!sections.ENTITIES) throw new Error('noentities');
+  function split(sec) {
+    var out = [], c = null, to = sec.to === undefined ? n : sec.to;
+    for (var k = sec.from; k < to; k++) {
+      if (pairs[k][0] === 0) { c = { type: pairs[k][1], p: [] }; out.push(c); }
+      else if (c) c.p.push(pairs[k]);
+    }
+    return out;
+  }
+  function merge(list) {
+    var out = [], pl = null;
+    list.forEach(function (e) {
+      if (e.type === 'POLYLINE') { e.verts = []; pl = e; out.push(e); }
+      else if (e.type === 'VERTEX' && pl) pl.verts.push(e);
+      else if (e.type === 'SEQEND') pl = null;
+      else out.push(e);
+    });
+    return out;
+  }
+
+  var layerOff = {};
+  if (sections.TABLES) {
+    split(sections.TABLES).forEach(function (e) {
+      if (e.type !== 'LAYER') return;
+      var nm = '', fl = 0, col = 1;
+      e.p.forEach(function (q) { if (q[0] === 2) nm = String(q[1]); else if (q[0] === 70) fl = parseInt(q[1], 10) || 0; else if (q[0] === 62) col = parseInt(q[1], 10) || 0; });
+      if ((fl & 1) || col < 0) layerOff[nm] = true;
+    });
+  }
+  var blocks = {};
+  if (sections.BLOCKS) {
+    var bcur = null;
+    split(sections.BLOCKS).forEach(function (e) {
+      if (e.type === 'BLOCK') {
+        var b = { name: '', base: { x: 0, y: 0 }, ents: [] };
+        e.p.forEach(function (q) { if (q[0] === 2) b.name = String(q[1]); else if (q[0] === 10) b.base.x = parseFloat(q[1]); else if (q[0] === 20) b.base.y = parseFloat(q[1]); });
+        blocks[b.name] = b; bcur = b;
+      } else if (e.type === 'ENDBLK') bcur = null;
+      else if (bcur) bcur.ents.push(e);
+    });
+    Object.keys(blocks).forEach(function (k) { blocks[k].ents = merge(blocks[k].ents); });
+  }
+
+  var paths = [], stats = {}, unsupported = {};
+  function unsup(t) { unsupported[t] = (unsupported[t] || 0) + 1; }
+  function addPath(verts, closed, layer, M) {
+    if (verts.length < 2 || paths.length > 300000) return;
+    var s2 = M[0] * M[0] + M[1] * M[1], t2 = M[2] * M[2] + M[3] * M[3];
+    if (!s2 || !t2) return;
+    var det = M[0] * M[3] - M[1] * M[2];
+    var similar = Math.abs(s2 - t2) <= 1e-9 * Math.max(s2, t2) && Math.abs(M[0] * M[2] + M[1] * M[3]) <= 1e-9 * s2;
+    if (!similar && verts.some(function (v) { return v.b; })) verts = tessellate(verts, closed);
+    var flip = det < 0;
+    paths.push({
+      closed: closed, layer: layer,
+      verts: verts.map(function (v) { var p = mapply(M, v.x, v.y); return { x: p.x, y: p.y, b: v.b ? (flip ? -v.b : v.b) : 0 }; })
+    });
+  }
+  function layerOf(e, inherit) {
+    var l = '0';
+    e.p.forEach(function (q) { if (q[0] === 8) l = String(q[1]); });
+    return (l === '0' && inherit) ? inherit : l;
+  }
+
+  function proc(e, M, inherit, depth, top) {
+    var t = e.type, f = parseFloat, layer = layerOf(e, inherit);
+    if (layerOff[layer]) return;
+    if (top && e.p.some(function (q) { return q[0] === 67 && parseInt(q[1], 10) === 1; })) return;
+    var N = getN(e), Mo = mmul(M, ocsMatrix(N)), k;
+
+    if (t === 'LWPOLYLINE') {
+      var vs = [], flag = 0;
+      e.p.forEach(function (q) {
+        if (q[0] === 70) flag = parseInt(q[1], 10) || 0;
+        else if (q[0] === 10) vs.push({ x: f(q[1]), y: 0, b: 0 });
+        else if (q[0] === 20 && vs.length) vs[vs.length - 1].y = f(q[1]);
+        else if (q[0] === 42 && vs.length) vs[vs.length - 1].b = f(q[1]) || 0;
+      });
+      addPath(vs, (flag & 1) === 1, layer, Mo);
+    } else if (t === 'POLYLINE') {
+      var fl = 0;
+      e.p.forEach(function (q) { if (q[0] === 70) fl = parseInt(q[1], 10) || 0; });
+      if (fl & (16 | 64)) { unsup('POLYLINE (mesh)'); return; }
+      var pv = [];
+      e.verts.forEach(function (ve) {
+        var x = 0, y = 0, b = 0, skip = false;
+        ve.p.forEach(function (q) {
+          if (q[0] === 10) x = f(q[1]); else if (q[0] === 20) y = f(q[1]); else if (q[0] === 42) b = f(q[1]) || 0;
+          else if (q[0] === 70 && ((parseInt(q[1], 10) || 0) & (16 | 128))) skip = true;
+        });
+        if (!skip) pv.push({ x: x, y: y, b: b });
+      });
+      addPath(pv, (fl & 1) === 1, layer, (fl & 8) ? M : Mo);
+    } else if (t === 'LINE') {
+      var l = { a: { x: 0, y: 0 }, b: { x: 0, y: 0 } };
+      e.p.forEach(function (q) {
+        if (q[0] === 10) l.a.x = f(q[1]); else if (q[0] === 20) l.a.y = f(q[1]);
+        else if (q[0] === 11) l.b.x = f(q[1]); else if (q[0] === 21) l.b.y = f(q[1]);
+      });
+      addPath([{ x: l.a.x, y: l.a.y, b: 0 }, { x: l.b.x, y: l.b.y, b: 0 }], false, layer, M);
+    } else if (t === 'CIRCLE' || t === 'ARC') {
+      var o = { cx: 0, cy: 0, r: 0, a1: 0, a2: 360 };
+      e.p.forEach(function (q) {
+        if (q[0] === 10) o.cx = f(q[1]); else if (q[0] === 20) o.cy = f(q[1]); else if (q[0] === 40) o.r = f(q[1]);
+        else if (q[0] === 50) o.a1 = f(q[1]); else if (q[0] === 51) o.a2 = f(q[1]);
+      });
+      if (!(o.r > 0)) return;
+      var diff = (((o.a2 - o.a1) % 360) + 360) % 360, rad = Math.PI / 180;
+      if (t === 'CIRCLE' || diff < 1e-9) addPath([{ x: o.cx + o.r, y: o.cy, b: 1 }, { x: o.cx - o.r, y: o.cy, b: 1 }], true, layer, Mo);
+      else addPath([{ x: o.cx + o.r * Math.cos(o.a1 * rad), y: o.cy + o.r * Math.sin(o.a1 * rad), b: Math.tan(diff * rad / 4) },
+                    { x: o.cx + o.r * Math.cos(o.a2 * rad), y: o.cy + o.r * Math.sin(o.a2 * rad), b: 0 }], false, layer, Mo);
+    } else if (t === 'ELLIPSE') {
+      var c = { x: 0, y: 0 }, mv = { x: 1, y: 0, z: 0 }, ratio = 1, t0 = 0, t1 = 2 * Math.PI;
+      e.p.forEach(function (q) {
+        if (q[0] === 10) c.x = f(q[1]); else if (q[0] === 20) c.y = f(q[1]);
+        else if (q[0] === 11) mv.x = f(q[1]); else if (q[0] === 21) mv.y = f(q[1]); else if (q[0] === 31) mv.z = f(q[1]);
+        else if (q[0] === 40) ratio = f(q[1]); else if (q[0] === 41) t0 = f(q[1]); else if (q[0] === 42) t1 = f(q[1]);
+      });
+      var nl = Math.hypot(N[0], N[1], N[2]) || 1, nn = [N[0] / nl, N[1] / nl, N[2] / nl];
+      var mnx = nn[1] * mv.z - nn[2] * mv.y, mny = nn[2] * mv.x - nn[0] * mv.z;
+      while (t1 <= t0) t1 += 2 * Math.PI;
+      var sweep = t1 - t0, full = sweep >= 2 * Math.PI - 1e-9;
+      var steps = Math.max(8, Math.ceil(sweep / (2 * Math.PI) * 720)), pts = [];
+      for (k = 0; k <= (full ? steps - 1 : steps); k++) {
+        var tt = t0 + sweep * k / steps;
+        pts.push({ x: c.x + Math.cos(tt) * mv.x + Math.sin(tt) * ratio * mnx, y: c.y + Math.cos(tt) * mv.y + Math.sin(tt) * ratio * mny, b: 0 });
+      }
+      addPath(pts, full, layer, M);
+    } else if (t === 'SPLINE') {
+      var deg = 3, sflags = 0, knots = [], ctrl = [], fit = [], wts = [];
+      e.p.forEach(function (q) {
+        var cc = q[0], v = f(q[1]);
+        if (cc === 70) sflags = parseInt(q[1], 10) || 0; else if (cc === 71) deg = parseInt(q[1], 10) || 3;
+        else if (cc === 40) knots.push(v); else if (cc === 41) wts.push(v);
+        else if (cc === 10) ctrl.push({ x: v, y: 0 }); else if (cc === 20 && ctrl.length) ctrl[ctrl.length - 1].y = v;
+        else if (cc === 11) fit.push({ x: v, y: 0 }); else if (cc === 21 && fit.length) fit[fit.length - 1].y = v;
+      });
+      var sp = [];
+      if (ctrl.length > deg && knots.length === ctrl.length + deg + 1) {
+        var w = wts.length === ctrl.length ? wts : ctrl.map(function () { return 1; });
+        var ta = knots[deg], tb = knots[ctrl.length], ns = Math.max(64, ctrl.length * 24);
+        for (k = 0; k <= ns; k++) { var p = evalNurbs(deg, knots, ctrl, w, ta + (tb - ta) * k / ns); sp.push({ x: p.x, y: p.y, b: 0 }); }
+      } else {
+        (fit.length >= 2 ? fit : ctrl).forEach(function (p) { sp.push({ x: p.x, y: p.y, b: 0 }); });
+      }
+      addPath(sp, (sflags & 1) === 1, layer, M);
+    } else if (t === 'HATCH') {
+      var hp = e.p, hk = 0, bad = false;
+      var take = function (code) { while (hk < hp.length && hp[hk][0] !== code) hk++; return hk < hp.length ? hp[hk++][1] : null; };
+      var np = parseInt(take(91), 10) || 0;
+      for (var pi = 0; pi < np && !bad; pi++) {
+        var pf = parseInt(take(92), 10) || 0;
+        if (pf & 2) {
+          var hasB = parseInt(take(72), 10) || 0; take(73);
+          var nv = parseInt(take(93), 10) || 0, hv = [];
+          for (var vi = 0; vi < nv; vi++) {
+            var hx = f(take(10)), hy = f(take(20));
+            hv.push({ x: hx, y: hy, b: hasB ? (f(take(42)) || 0) : 0 });
+          }
+          addPath(hv, true, layer, Mo);
+        } else {
+          var ne = parseInt(take(93), 10) || 0, hs = [];
+          for (var ei = 0; ei < ne; ei++) {
+            var et = parseInt(take(72), 10);
+            if (et === 1) {
+              var ax = f(take(10)), ay = f(take(20)), bx = f(take(11)), by = f(take(21));
+              hs.push({ a: { x: ax, y: ay }, b: { x: bx, y: by }, bulge: 0 });
+            } else if (et === 2) {
+              var ccx = f(take(10)), ccy = f(take(20)), cr = f(take(40)), s1 = f(take(50)), s2 = f(take(51)), ccw = parseInt(take(73), 10);
+              var rd = Math.PI / 180, dl = ccw ? (((s2 - s1) % 360) + 360) % 360 : (((s1 - s2) % 360) + 360) % 360;
+              if (!dl) dl = 360;
+              hs.push({ a: { x: ccx + cr * Math.cos(s1 * rd), y: ccy + cr * Math.sin(s1 * rd) },
+                        b: { x: ccx + cr * Math.cos(s2 * rd), y: ccy + cr * Math.sin(s2 * rd) },
+                        bulge: (ccw ? 1 : -1) * Math.tan(dl * rd / 4) });
+            } else { unsup('HATCH (حافة منحنية)'); bad = true; break; }
+          }
+          if (!bad && hs.length) chainLoops(hs, tolOf(hs)).forEach(function (lv) { addPath(lv, true, layer, Mo); });
+        }
+      }
+    } else if (t === 'INSERT') {
+      var name = '', ins = { x: 0, y: 0 }, sx = 1, sy = 1, rot = 0, cols = 1, rows = 1, dx = 0, dy = 0;
+      e.p.forEach(function (q) {
+        var cc = q[0];
+        if (cc === 2) name = String(q[1]); else if (cc === 10) ins.x = f(q[1]); else if (cc === 20) ins.y = f(q[1]);
+        else if (cc === 41) sx = f(q[1]); else if (cc === 42) sy = f(q[1]); else if (cc === 50) rot = f(q[1]);
+        else if (cc === 70) cols = Math.max(1, parseInt(q[1], 10) || 1); else if (cc === 71) rows = Math.max(1, parseInt(q[1], 10) || 1);
+        else if (cc === 44) dx = f(q[1]); else if (cc === 45) dy = f(q[1]);
+      });
+      var blk = blocks[name];
+      if (!blk) { unsup('INSERT (بلوك مفقود)'); return; }
+      if (depth > 12 || cols * rows > 10000) return;
+      var th = rot * Math.PI / 180, cs = Math.cos(th), sn = Math.sin(th);
+      for (var rr = 0; rr < rows; rr++) {
+        for (var cc2 = 0; cc2 < cols; cc2++) {
+          var ox = cc2 * dx * cs - rr * dy * sn, oy = cc2 * dx * sn + rr * dy * cs;
+          var Mins = [sx * cs, sx * sn, -sy * sn, sy * cs, ins.x + ox, ins.y + oy];
+          var Mfull = mmul(Mo, mmul(Mins, [1, 0, 0, 1, -blk.base.x, -blk.base.y]));
+          blk.ents.forEach(function (be) { proc(be, Mfull, layer, depth + 1, false); });
+        }
+      }
+    } else if (t === 'SOLID' || t === 'TRACE' || t === '3DFACE' || t === 'MLINE' || t === 'REGION' || t === '3DSOLID' || t === 'MESH') {
+      unsup(t);
+      return;
+    } else return;
+    if (top) stats[t] = (stats[t] || 0) + 1;
+  }
+
+  merge(split(sections.ENTITIES)).forEach(function (e) { proc(e, IDENT, '', 0, true); });
+
+  var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  function grow(x, y) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }
+  paths.forEach(function (p) {
+    var vn = p.verts.length;
+    p.verts.forEach(function (v, idx) {
+      grow(v.x, v.y);
+      if (v.b && (p.closed || idx + 1 < vn)) {
+        var nx = p.verts[(idx + 1) % vn], dx = nx.x - v.x, dy = nx.y - v.y;
+        grow(v.x + dx / 2 + dy * v.b / 2, v.y + dy / 2 - dx * v.b / 2);
+      }
+    });
+  });
+  if (minX === Infinity) throw new Error('empty');
+  var diag = Math.hypot(maxX - minX, maxY - minY), tol = Math.max(diag * 1e-7, 1e-9);
+
+  var shapes = [], segs = [], seen = {}, layers = {};
+  function addShape(v, layer) {
+    if (!(v.length >= 3 || (v.length === 2 && (v[0].b || v[1].b)))) return;
+    var area = polyArea(v);
+    if (!(area > 0)) return;
+    var bx0 = Infinity, by0 = Infinity;
+    v.forEach(function (p) { bx0 = Math.min(bx0, p.x); by0 = Math.min(by0, p.y); });
+    var key = area.toPrecision(10) + '|' + Math.round(bx0 / tol) + '|' + Math.round(by0 / tol);
+    if (seen[key]) return;
+    seen[key] = true;
+    shapes.push({ t: 'poly', verts: v, area: area, layer: layer });
+  }
+  paths.forEach(function (p) {
+    layers[p.layer] = true;
+    var v = p.verts;
+    if (!p.closed && v.length >= 3 && Math.hypot(v[0].x - v[v.length - 1].x, v[0].y - v[v.length - 1].y) < Math.max(tol * 10, diag * 1e-5)) {
+      p.closed = true; v.pop();
+    }
+    if (p.closed) addShape(v, p.layer);
+    else for (var k = 0; k + 1 < v.length; k++) segs.push({ a: v[k], b: v[k + 1], bulge: v[k].b });
+  });
+  chainLoops(segs, tol).forEach(function (v) { addShape(v, ''); });
+
+  shapes.sort(function (a, b) { return b.area - a.area; });
+  shapes.forEach(function (s, idx) { s.id = idx; });
+  return { units: units, paths: paths, shapes: shapes, bounds: { minX: minX, minY: minY, maxX: maxX, maxY: maxY },
+           stats: stats, unsupported: unsupported, layers: Object.keys(layers) };
+}
+
+function parseDxf(input) {
+  var pairs;
+  if (typeof input === 'string') {
+    if (/^AutoCAD Binary DXF/.test(input)) throw new Error('binary');
+    pairs = parsePairs(input);
+  } else {
+    var head = '';
+    for (var i = 0; i < 18 && i < input.length; i++) head += String.fromCharCode(input[i]);
+    if (head === 'AutoCAD Binary DXF') {
+      try { pairs = readBinary(input); } catch (e) { throw new Error('binarybad'); }
+    } else pairs = parsePairs(new TextDecoder('utf-8').decode(input));
+  }
+  return buildDxf(pairs);
+}
+/*PURE-END*/
+
+(function () {
+  var AR = '٠١٢٣٤٥٦٧٨٩';
+  var useArabic = true;
+  var FEDDAN_M2_NUM = 25205, FEDDAN_M2_DEN = 6; // 4200 + 5/6 m2
+  var UNIT_BY_INSUNITS = { 1: 0.0254, 2: 0.3048, 4: 0.001, 5: 0.01, 6: 1, 7: 1000 };
+  var UNIT_NAME = { '1': 'متر', '0.01': 'سنتيمتر', '0.001': 'مللي', '0.3048': 'قدم', '0.0254': 'بوصة', '1000': 'كيلومتر' };
+  var CANDS = [[1, 'المتر'], [0.01, 'السنتيمتر'], [0.001, 'المللي'], [0.3048, 'القدم'], [0.0254, 'البوصة']];
+
+  var el = function (id) { return document.getElementById(id); };
+  var inF = el('in-f'), inQ = el('in-q'), inS = el('in-s');
+  var inputs = { f: inF, q: inQ, s: inS };
+
+  function digitsIn(str) {
+    return str.replace(/[٠-٩]/g, function (d) { return '٠١٢٣٤٥٦٧٨٩'.indexOf(d); })
+              .replace(/[۰-۹]/g, function (d) { return '۰۱۲۳۴۵۶۷۸۹'.indexOf(d); })
+              .replace(/[٫,،]/g, '.').replace(/[^0-9.]/g, '').replace(/^(\d*\.\d*)\./, function (m, a) { return a; });
+  }
+  function show(str) { return useArabic ? String(str).replace(/\d/g, function (d) { return AR[d]; }) : String(str); }
+  function fmt(n, dec) {
+    var parts = n.toFixed(dec).split('.');
+    var g = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, useArabic ? '٬' : ',');
+    return show(g + (parts[1] ? '.' + parts[1] : ''));
+  }
+  function val(key) { return parseFloat(digitsIn(inputs[key].value)) || 0; }
+
+  var last = { fed: '0.0000', m2: '0.00', m2num: 0 };
+
+  function update() {
+    var f = val('f'), q = val('q'), s = val('s');
+    var total = f * 576 + q * 24 + s;            // everything in sahm
+    var fed = total / 576;
+    var m2 = total * FEDDAN_M2_NUM / (FEDDAN_M2_DEN * 576);
+    last.fed = fed.toFixed(4);
+    last.m2 = m2.toFixed(2);
+    last.m2num = m2;
+
+    el('out-f').textContent = fmt(fed, 4);
+    el('out-m').textContent = fmt(m2, 2);
+
+    var tt = Math.round(total * 1e6) / 1e6, nf = Math.floor(tt / 576), rem = tt - nf * 576;
+    var nq = Math.floor(rem / 24), ns = +(rem - nq * 24).toFixed(2);
+    var hint = el('hint');
+    if (q >= 24 || s >= 24 || f % 1 || q % 1) {
+      hint.textContent = 'التقسيم الفعلي: ' + show(nf + ' فدان و ' + nq + ' قيراط و ' + ns + ' سهم');
+    } else {
+      hint.textContent = total === 0 ? 'اكتب أي رقم ليظهر الناتج.' : '';
+    }
+    renderCad();
+  }
+
+  function setField(key, n) { inputs[key].value = show(String(n)); }
+  function renderInputs() { ['f', 'q', 's'].forEach(function (k) { setField(k, val(k)); }); }
+
+  Object.keys(inputs).forEach(function (k) {
+    inputs[k].addEventListener('input', function () {
+      var shown = show(digitsIn(inputs[k].value));
+      if (inputs[k].value !== shown) inputs[k].value = shown;
+      update();
+    });
+    inputs[k].addEventListener('focus', function () { inputs[k].select(); });
+    inputs[k].addEventListener('blur', function () { setField(k, val(k)); });
+  });
+
+  document.querySelectorAll('[data-step]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var k = b.getAttribute('data-step'), d = parseInt(b.getAttribute('data-d'), 10);
+      setField(k, Math.max(0, +(val(k) + d).toFixed(6)));
+      update();
+    });
+  });
+
+  el('clear').addEventListener('click', function () {
+    ['f', 'q', 's'].forEach(function (k) { setField(k, 0); });
+    update();
+    inF.focus();
+  });
+
+  function setDigits(arabic) {
+    useArabic = arabic;
+    el('btn-ar').setAttribute('aria-pressed', String(arabic));
+    el('btn-en').setAttribute('aria-pressed', String(!arabic));
+    renderInputs();
+    update();
+  }
+  el('btn-ar').addEventListener('click', function () { setDigits(true); });
+  el('btn-en').addEventListener('click', function () { setDigits(false); });
+
+  document.querySelectorAll('[data-copy]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var text = b.getAttribute('data-copy') === 'f' ? last.fed : last.m2;
+      var done = function () { var old = b.textContent; b.textContent = 'تم النسخ'; setTimeout(function () { b.textContent = old; }, 1400); };
+      var fallback = function () {
+        var target = el(b.getAttribute('data-copy') === 'f' ? 'out-f' : 'out-m');
+        var r = document.createRange(); r.selectNodeContents(target);
+        var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      };
+      try { navigator.clipboard.writeText(text).then(done, fallback); } catch (e) { fallback(); }
+    });
+  });
+
+  /* ---------- CAD panel ---------- */
+  var cad = null;            // { name, data }
+  var selected = {};         // shape id -> true
+  var userPicked = false;
+  var stage = el('stage');
+
+  function unitFactor() {
+    var v = el('unit').value;
+    if (v !== 'auto') return { k: parseFloat(v), auto: false };
+    var u = cad && UNIT_BY_INSUNITS[cad.data.units];
+    return { k: u || 1, auto: true, known: !!u };
+  }
+  var OX = 0, OY = 0;
+  function n4(n) { return String(+n.toFixed(4)); }
+
+  function arcTo(a, b) {
+    var dist = Math.hypot(b.x - a.x, b.y - a.y), bb = a.b;
+    var r = dist * (1 + bb * bb) / (4 * Math.abs(bb));
+    return 'A' + n4(r) + ' ' + n4(r) + ' 0 ' + (Math.abs(bb) > 1 ? 1 : 0) + ' ' + (bb > 0 ? 1 : 0) + ' ' + n4(b.x - OX) + ' ' + n4(OY - b.y);
+  }
+  function pathD(vs, closed) {
+    var d = 'M' + n4(vs[0].x - OX) + ' ' + n4(OY - vs[0].y), cnt = closed ? vs.length : vs.length - 1;
+    for (var i = 0; i < cnt; i++) {
+      var a = vs[i], b = vs[(i + 1) % vs.length];
+      d += a.b ? arcTo(a, b) : 'L' + n4(b.x - OX) + ' ' + n4(OY - b.y);
+    }
+    return d + (closed ? 'Z' : '');
+  }
+
+  function buildSvg(k) {
+    var d = cad.data, b = d.bounds;
+    var w = b.maxX - b.minX, h = b.maxY - b.minY, pad = Math.max(w, h) * 0.07 || 1;
+    OX = b.minX; OY = b.maxY;
+    var vx = -pad, vy = -pad, vw = w + pad * 2, vh = h + pad * 2;
+    var fs = Math.max(vw, vh) * 0.026;
+    var out = '<svg class="cad" viewBox="' + n4(vx) + ' ' + n4(vy) + ' ' + n4(vw) + ' ' + n4(vh) + '" preserveAspectRatio="xMidYMid meet" role="img" aria-label="رسم الكاد">';
+
+    d.shapes.forEach(function (s) {
+      out += '<path class="shape' + (selected[s.id] ? ' on' : '') + '" d="' + pathD(s.verts, true) + '"/>';
+    });
+    d.paths.forEach(function (p) {
+      if (p.verts.length < 2) return;
+      out += '<path class="raw" d="' + pathD(p.verts, p.closed) + '"/>';
+    });
+    d.shapes.forEach(function (s) {
+      if (selected[s.id]) out += '<path class="shape on-edge" d="' + pathD(s.verts, true) + '"/>';
+    });
+    // edge lengths for the selected polygons (straight edges only)
+    var nSel = d.shapes.filter(function (s) { return selected[s.id]; }).length;
+    if (nSel && nSel <= 3) {
+      d.shapes.forEach(function (s) {
+        if (!selected[s.id] || s.verts.length > 12) return;
+        s.verts.forEach(function (a, i) {
+          var c = s.verts[(i + 1) % s.verts.length];
+          if (a.b) return;
+          var len = Math.hypot(c.x - a.x, c.y - a.y) * k;
+          out += '<text x="' + n4((a.x + c.x) / 2 - OX) + '" y="' + n4(OY - (a.y + c.y) / 2) + '" font-size="' + n4(fs) + '">' + show(len.toFixed(2)) + '</text>';
+        });
+      });
+    }
+    return out + '</svg>';
+  }
+
+  function setVerdict(state, pill, cadTxt, totTxt, diffTxt, fedTxt, why) {
+    var v = el('verdict');
+    v.setAttribute('data-state', state);
+    el('pill').textContent = pill;
+    el('v-cad').textContent = cadTxt;
+    el('v-tot').textContent = totTxt;
+    el('v-diff').textContent = diffTxt;
+    el('v-fed').textContent = fedTxt;
+    el('v-why').textContent = why || '';
+    el('v-suggest').hidden = true;
+  }
+  function setMsg(text, isErr) {
+    var m = el('cad-msg');
+    m.className = 'msg' + (isErr ? ' err' : '');
+    m.textContent = text;
+  }
+
+  function renderCad() {
+    var list = el('shapes');
+    if (!cad) {
+      setVerdict('idle', 'في انتظار الملف', '—', last.m2num ? fmt(last.m2num, 2) + ' م²' : '—', '—', '—', '');
+      list.textContent = '';
+      return;
+    }
+    var u = unitFactor(), k = u.k, k2 = k * k, d = cad.data, b = d.bounds;
+
+    if (!userPicked && d.shapes.length) {
+      var tg = last.m2num, bi = 0, bd = Infinity;
+      if (tg > 0) d.shapes.forEach(function (s, i) { var dd = Math.abs(s.area * k2 - tg); if (dd < bd) { bd = dd; bi = i; } });
+      selected = {}; selected[d.shapes[bi].id] = true;
+    }
+    stage.classList.add('loaded');
+    stage.innerHTML = buildSvg(k);
+
+    // info lines
+    var info = [];
+    var stats = Object.keys(d.stats).map(function (t) { return t + ' ×' + show(d.stats[t]); }).join('، ');
+    if (stats) info.push('اتقرأ من الملف: ' + stats + '.');
+    info.push('أبعاد الرسم بوحدة ' + (UNIT_NAME[String(k)] || 'المتر') + ': ' + fmt((b.maxX - b.minX) * k, 2) + ' × ' + fmt((b.maxY - b.minY) * k, 2) + ' م.');
+    if (u.auto) info.push(u.known ? 'الوحدة المقروءة من الملف: ' + UNIT_NAME[String(k)] + '.' : 'الملف لا يحدد وحدة الرسم، تم افتراض المتر.');
+    var un = Object.keys(d.unsupported);
+    if (un.length) info.push('عناصر مش مدعومة وتم تجاهلها: ' + un.map(function (t) { return t + ' ×' + show(d.unsupported[t]); }).join('، ') + '.');
+    setMsg(info.join('\n'), false);
+
+    // shapes list (largest 40)
+    list.textContent = '';
+    d.shapes.slice(0, 40).forEach(function (s, idx) {
+      var li = document.createElement('li');
+      var lab = document.createElement('label');
+      var cb = document.createElement('input');
+      cb.type = 'checkbox'; cb.checked = !!selected[s.id]; cb.setAttribute('data-id', s.id);
+      var name = document.createElement('span');
+      var isCircle = s.verts.length === 2 && s.verts[0].b && s.verts[1].b;
+      name.textContent = 'شكل ' + show(idx + 1) + (isCircle ? ' (دائرة)' : ' (' + show(s.verts.length) + ' نقطة)') + (s.layer ? ' — طبقة ' + s.layer : '');
+      var a = document.createElement('span');
+      a.className = 'a'; a.textContent = fmt(s.area * k2, 2) + ' م²';
+      lab.appendChild(cb); lab.appendChild(name); lab.appendChild(a);
+      li.appendChild(lab); list.appendChild(li);
+    });
+    if (d.shapes.length > 40) {
+      var more = document.createElement('li');
+      more.className = 'more'; more.textContent = 'معروض أكبر ٤٠ شكل من ' + show(d.shapes.length) + '.';
+      list.appendChild(more);
+    }
+
+    if (!d.shapes.length) {
+      setMsg(info.join('\n') + '\nمفيش شكل مقفول في الملف (بوليلاين مقفول أو دائرة أو هاتش أو خطوط متصلة ببعض). اقفل حدود القطعة وجرّب تاني.', true);
+      setVerdict('idle', 'مفيش شكل مقفول', '—', fmt(last.m2num, 2) + ' م²', '—', '—', '');
+      return;
+    }
+
+    // area of the selected shapes
+    var cadArea = 0, count = 0;
+    d.shapes.forEach(function (s) { if (selected[s.id]) { cadArea += s.area * k2; count++; } });
+    var target = last.m2num;
+
+    var fedTxt = '—';
+    if (count) {
+      var fedV = cadArea * FEDDAN_M2_DEN / FEDDAN_M2_NUM;
+      var tot = Math.round(fedV * 576), nf = Math.floor(tot / 576), r = tot % 576;
+      fedTxt = fmt(fedV, 4) + ' (' + show(nf) + ' ف ' + show(Math.floor(r / 24)) + ' ق ' + show(r % 24) + ' س)';
+    }
+    if (!count) { setVerdict('idle', 'اختر شكل للمقارنة', '—', fmt(target, 2) + ' م²', '—', '—', 'علّم على شكل واحد أو أكثر من القائمة تحت.'); return; }
+    if (!target) { setVerdict('idle', 'اكتب المساحة أولًا', fmt(cadArea, 2) + ' م²', '—', '—', fedTxt, 'ادخل الفدان والقيراط والسهم فوق عشان نقارن.'); return; }
+
+    var diff = cadArea - target, pct = diff / target * 100, tol = parseFloat(el('tol').value);
+    var ok = Math.abs(pct) <= tol;
+    var sign = diff > 0 ? '+' : (diff < 0 ? '−' : '');
+    var diffTxt = sign + fmt(Math.abs(diff), 2) + ' م² (' + sign + show(Math.abs(pct).toFixed(2)) + '٪)';
+    var why = ok ? 'الفرق داخل هامش السماح (' + show(tol) + '٪).'
+      : (diff > 0 ? 'مساحة الكاد أكبر من المُدخل.' : 'مساحة الكاد أصغر من المُدخل.');
+    setVerdict(ok ? 'good' : 'bad', ok ? 'متوافق' : 'غير متوافق', fmt(cadArea, 2) + ' م²', fmt(target, 2) + ' م²', diffTxt, fedTxt, why);
+
+    // would another drawing unit match?
+    if (!ok) {
+      var best = null;
+      d.shapes.forEach(function (s) { CANDS.forEach(function (c) {
+        var p = Math.abs(s.area * c[0] * c[0] - target) / target * 100;
+        if (!best || p < best.p) best = { k: c[0], n: c[1], p: p };
+      }); });
+      if (best && best.k !== k && best.p <= tol) {
+        var sug = el('v-suggest');
+        sug.textContent = 'الرسم يتطابق لو وحدته ' + best.n + '، اضبطها';
+        sug.hidden = false;
+        sug.onclick = function () { el('unit').value = String(best.k); renderCad(); };
+      }
+    }
+  }
+
+  function loadInput(input, name) {
+    var data;
+    try { data = parseDxf(input); }
+    catch (e) {
+      var m = e.message === 'binary' || e.message === 'binarybad' ? 'الملف DXF ثنائي وتعذرت قراءته. احفظه من البرنامج بصيغة DXF نصي (ASCII) وارفعه تاني.'
+        : e.message === 'noentities' ? 'مش لاقي قسم الرسم (ENTITIES) في الملف. تأكد إنه ملف DXF سليم.'
+        : e.message === 'empty' ? 'الملف مفيهوش عناصر رسم أقدر أقراها (ممكن الرسم كله في Paper Space أو طبقات مجمّدة).'
+        : 'تعذرت قراءة الملف. تأكد إنه DXF سليم.';
+      setMsg(m, true);
+      return;
+    }
+    cad = { name: name, data: data };
+    selected = {}; userPicked = false;
+    if (data.shapes.length) selected[data.shapes[0].id] = true;   // largest closed shape by default
+    el('fname').textContent = name;
+    renderCad();
+  }
+
+  function readFile(file) {
+    if (!file) return;
+    if (/\.dwg$/i.test(file.name)) { setMsg('ده ملف DWG مش DXF. من الأوتوكاد اعمل Save As واختار DXF.', true); return; }
+    var fr = new FileReader();
+    fr.onload = function () { loadInput(new Uint8Array(fr.result), file.name); };
+    fr.onerror = function () { setMsg('مقدرتش أقرا الملف.', true); };
+    fr.readAsArrayBuffer(file);
+  }
+
+  function sampleDxf(area) {
+    area = area > 0 ? area : 5000;
+    var H = +(area / 200).toFixed(4);
+    function lw(pts, layer) {
+      var a = ['0', 'LWPOLYLINE', '8', layer, '90', String(pts.length), '70', '1'];
+      pts.forEach(function (p) { a.push('10', String(p[0]), '20', String(p[1])); });
+      return a;
+    }
+    var rows = ['0', 'SECTION', '2', 'HEADER', '9', '$INSUNITS', '70', '6', '0', 'ENDSEC', '0', 'SECTION', '2', 'ENTITIES']
+      .concat(lw([[0, 0], [220, 0], [180, H], [0, H]], 'PLOT'))
+      .concat(lw([[20, 20], [40, 20], [40, 35], [20, 35]], 'BUILDING'))
+      .concat(['0', 'ENDSEC', '0', 'EOF']);
+    return rows.join('\n');
+  }
+
+  el('file').addEventListener('change', function (e) { readFile(e.target.files[0]); e.target.value = ''; });
+  el('demo').addEventListener('click', function () { loadInput(sampleDxf(last.m2num), 'ملف تجريبي.dxf'); });
+  el('unit').addEventListener('change', renderCad);
+  el('tol').addEventListener('change', renderCad);
+  el('shapes').addEventListener('change', function (e) {
+    var id = e.target.getAttribute('data-id');
+    if (id === null) return;
+    userPicked = true;
+    if (e.target.checked) selected[id] = true; else delete selected[id];
+    renderCad();
+  });
+  ['dragenter', 'dragover'].forEach(function (ev) {
+    stage.addEventListener(ev, function (e) { e.preventDefault(); stage.classList.add('drag'); });
+  });
+  ['dragleave', 'drop'].forEach(function (ev) {
+    stage.addEventListener(ev, function (e) { e.preventDefault(); stage.classList.remove('drag'); });
+  });
+  stage.addEventListener('drop', function (e) { readFile(e.dataTransfer && e.dataTransfer.files[0]); });
+
+  renderInputs();
+  update();
+})();
+</script>
+
+</body>
+</html>
