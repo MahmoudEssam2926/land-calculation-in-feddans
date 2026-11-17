@@ -148,6 +148,18 @@ button:focus-visible, input:focus-visible, select:focus-visible, .btn:focus-with
 .site-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 0.88rem; color: var(--muted); }
 .site-footer a { color: var(--accent); font-weight: 500; text-decoration: underline; text-underline-offset: 3px; }
 .site-footer a:hover { color: var(--ink); }
+.rev { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.rev > * { min-width: 0; }
+.stepper.single { grid-template-columns: minmax(0, 1fr); }
+.rev .read { margin-top: 10px; }
+.rev .read .value { font-size: clamp(1.15rem, 4.4vw, 1.55rem); direction: rtl; text-align: right; line-height: 1.5; }
+.rev .read .u { font-size: 0.95rem; direction: rtl; }
+@media (max-width: 560px) { .rev { grid-template-columns: 1fr; } }
+.cmp { display: grid; gap: 4px; }
+.cmp > div { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 0.9rem; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); }
+.cmp .ok { border-color: var(--good); color: var(--good); }
+.cmp .no { border-color: var(--bad); color: var(--bad); }
+.cmp b { direction: ltr; font-variant-numeric: tabular-nums; }
 </style>
 </head>
 <body>
@@ -199,9 +211,26 @@ button:focus-visible, input:focus-visible, select:focus-visible, .btn:focus-with
     </div>
   </section>
 
+  <section class="panel" aria-label="تحويل عكسي">
+    <h2>تحويل عكسي</h2>
+    <p class="plan-note">اكتب الإجمالي بالفدان أو بالمتر المربع، وهيتقسم فدان وقيراط وسهم مع الإجمالي التاني.</p>
+    <div class="rev">
+      <div class="field">
+        <label for="in-tf"><span class="unit">إجمالي بالفدان</span></label>
+        <div class="stepper single"><input id="in-tf" inputmode="decimal" autocomplete="off" maxlength="16" placeholder="4.7945"></div>
+        <div class="read"><span class="label">يساوي</span><span class="value" id="rv-f-split">—</span><span class="u" id="rv-f-extra"></span></div>
+      </div>
+      <div class="field">
+        <label for="in-tm"><span class="unit">إجمالي بالمتر المربع</span></label>
+        <div class="stepper single"><input id="in-tm" inputmode="decimal" autocomplete="off" maxlength="16" placeholder="20142.55"></div>
+        <div class="read"><span class="label">يساوي</span><span class="value" id="rv-m-split">—</span><span class="u" id="rv-m-extra"></span></div>
+      </div>
+    </div>
+  </section>
+
   <section class="panel" aria-label="مطابقة ملف الكاد">
     <h2>مطابقة ملف الكاد</h2>
-    <p class="plan-note">ارفع ملف DXF للقطعة، وهيتعرض الرسم وتتحسب مساحته، ونقارنها بالإجمالي بالمتر المربع اللي فوق.</p>
+    <p class="plan-note">ارفع ملف DXF للقطعة، وهيتعرض الرسم وتتحسب مساحته، ونقارنها بكل المدخلات اللي فوق (فدان/قيراط/سهم، والإجمالي بالفدان، والإجمالي بالمتر).</p>
 
     <div class="controls">
       <label class="btn" for="file">اختيار ملف DXF</label>
@@ -242,6 +271,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, .btn:focus-with
         <div><dt>مساحة الكاد بالفدان</dt><dd id="v-fed">—</dd></div>
       </dl>
       <p class="why" id="v-why"></p>
+      <div class="cmp" id="v-all"></div>
       <button type="button" class="btn" id="v-suggest" hidden></button>
     </div>
 
@@ -250,7 +280,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, .btn:focus-with
 
   <p class="facts">الفدان = <strong>٢٤ قيراط</strong> والقيراط = <strong>٢٤ سهم</strong>، أي الفدان = ٥٧٦ سهم. الفدان = <strong>٤٢٠٠٫٨٣٣ متر مربع</strong> (٤٢٠٠ + ٥/٦).</p>
   <footer class="site-footer">
-    <a href="https://mahmoudessam.vercel.app" target="_blank" rel="noopener noreferrer" dir="ltr">Author : Giser. Mahmoud Essam</a>
+    <span>صاحب الموقع: <bdi dir="ltr">giser.mahmoud essam</bdi></span>
+    <a href="https://mahmoudessam.vercel.app" target="_blank" rel="noopener noreferrer" dir="ltr">mahmoudessam.vercel.app</a>
   </footer>
 </main>
 
@@ -765,7 +796,11 @@ function parseDxf(input) {
   }
 
   function setField(key, n) { inputs[key].value = show(String(n)); }
-  function renderInputs() { ['f', 'q', 's'].forEach(function (k) { setField(k, val(k)); }); }
+  function renderInputs() {
+    ['f', 'q', 's'].forEach(function (k) { setField(k, val(k)); });
+    [inTF, inTM].forEach(function (i) { if (i && i.value) i.value = show(digitsIn(i.value)); });
+    renderRev();
+  }
 
   Object.keys(inputs).forEach(function (k) {
     inputs[k].addEventListener('input', function () {
@@ -813,6 +848,44 @@ function parseDxf(input) {
       try { navigator.clipboard.writeText(text).then(done, fallback); } catch (e) { fallback(); }
     });
   });
+
+  /* ---------- reverse converter ---------- */
+  var inTF = el('in-tf'), inTM = el('in-tm');
+  function splitFed(fed) {
+    var tot = Math.round(fed * 576 * 100), nf = Math.floor(tot / 57600), r = tot - nf * 57600, nq = Math.floor(r / 2400);
+    var ns = +((r - nq * 2400) / 100).toFixed(2);
+    return show(nf) + ' فدان  ' + show(nq) + ' قيراط  ' + show(String(ns)) + ' سهم';
+  }
+  function renderRev() {
+    var a = parseFloat(digitsIn(inTF.value)), b = parseFloat(digitsIn(inTM.value));
+    if (isFinite(a) && a >= 0 && a < 1e9) {
+      el('rv-f-split').textContent = splitFed(a);
+      el('rv-f-extra').textContent = 'بالمتر المربع: ' + fmt(a * FEDDAN_M2_NUM / FEDDAN_M2_DEN, 2) + ' م²';
+    } else { el('rv-f-split').textContent = '—'; el('rv-f-extra').textContent = ''; }
+    if (isFinite(b) && b >= 0 && b < 1e12) {
+      var fd = b * FEDDAN_M2_DEN / FEDDAN_M2_NUM;
+      el('rv-m-split').textContent = splitFed(fd);
+      el('rv-m-extra').textContent = 'بالفدان: ' + fmt(fd, 4) + ' فدان';
+    } else { el('rv-m-split').textContent = '—'; el('rv-m-extra').textContent = ''; }
+  }
+  [inTF, inTM].forEach(function (inp) {
+    inp.addEventListener('input', function () {
+      var sh = show(digitsIn(inp.value));
+      if (inp.value !== sh) inp.value = sh;
+      renderRev();
+      if (cad) renderCad();
+    });
+    inp.addEventListener('focus', function () { inp.select(); });
+  });
+
+  function targets() {
+    var t = [];
+    if (last.m2num > 0) t.push({ n: 'فدان / قيراط / سهم', m: last.m2num });
+    var a = parseFloat(digitsIn(inTF.value)), b = parseFloat(digitsIn(inTM.value));
+    if (a > 0) t.push({ n: 'إجمالي بالفدان', m: a * FEDDAN_M2_NUM / FEDDAN_M2_DEN });
+    if (b > 0) t.push({ n: 'إجمالي بالمتر المربع', m: b });
+    return t;
+  }
 
   /* ---------- CAD panel ---------- */
   var cad = null;            // { name, data }
@@ -880,6 +953,7 @@ function parseDxf(input) {
   function setVerdict(state, pill, cadTxt, totTxt, diffTxt, fedTxt, why) {
     var v = el('verdict');
     v.setAttribute('data-state', state);
+    el('v-all').innerHTML = '';
     el('pill').textContent = pill;
     el('v-cad').textContent = cadTxt;
     el('v-tot').textContent = totTxt;
@@ -904,8 +978,8 @@ function parseDxf(input) {
     var u = unitFactor(), k = u.k, k2 = k * k, d = cad.data, b = d.bounds;
 
     if (!userPicked && d.shapes.length) {
-      var tg = last.m2num, bi = 0, bd = Infinity;
-      if (tg > 0) d.shapes.forEach(function (s, i) { var dd = Math.abs(s.area * k2 - tg); if (dd < bd) { bd = dd; bi = i; } });
+      var T0 = targets(), bi = 0, bd = Infinity;
+      d.shapes.forEach(function (s, i) { T0.forEach(function (t) { var dd = Math.abs(s.area * k2 - t.m); if (dd < bd) { bd = dd; bi = i; } }); });
       selected = {}; selected[d.shapes[bi].id] = true;
     }
     stage.classList.add('loaded');
@@ -951,7 +1025,7 @@ function parseDxf(input) {
     // area of the selected shapes
     var cadArea = 0, count = 0;
     d.shapes.forEach(function (s) { if (selected[s.id]) { cadArea += s.area * k2; count++; } });
-    var target = last.m2num;
+    var T = targets(), target = T.length ? T[0].m : 0;
 
     var fedTxt = '—';
     if (count) {
@@ -963,18 +1037,24 @@ function parseDxf(input) {
     if (!target) { setVerdict('idle', 'اكتب المساحة أولًا', fmt(cadArea, 2) + ' م²', '—', '—', fedTxt, 'ادخل الفدان والقيراط والسهم فوق عشان نقارن.'); return; }
 
     var diff = cadArea - target, pct = diff / target * 100, tol = parseFloat(el('tol').value);
-    var ok = Math.abs(pct) <= tol;
+    var ok = Math.abs(pct) <= tol, allOk = true, rowsHtml = '';
+    T.forEach(function (t) {
+      var df = cadArea - t.m, pc = Math.abs(df) / t.m * 100, o = pc <= tol;
+      if (!o) allOk = false;
+      rowsHtml += '<div class="' + (o ? 'ok' : 'no') + '"><span>' + (o ? '✅ ' : '❌ ') + t.n + '</span><b>' + fmt(t.m, 2) + ' م² · ' + (df > 0 ? '+' : df < 0 ? '−' : '') + fmt(Math.abs(df), 2) + ' م² (' + show(pc.toFixed(2)) + '٪)</b></div>';
+    });
     var sign = diff > 0 ? '+' : (diff < 0 ? '−' : '');
     var diffTxt = sign + fmt(Math.abs(diff), 2) + ' م² (' + sign + show(Math.abs(pct).toFixed(2)) + '٪)';
     var why = ok ? 'الفرق داخل هامش السماح (' + show(tol) + '٪).'
       : (diff > 0 ? 'مساحة الكاد أكبر من المُدخل.' : 'مساحة الكاد أصغر من المُدخل.');
-    setVerdict(ok ? 'good' : 'bad', ok ? 'متوافق' : 'غير متوافق', fmt(cadArea, 2) + ' م²', fmt(target, 2) + ' م²', diffTxt, fedTxt, why);
+    setVerdict(allOk ? 'good' : 'bad', allOk ? (T.length > 1 ? 'متوافق مع كل المدخلات' : 'متوافق') : (T.length > 1 ? 'غير متوافق مع بعض المدخلات' : 'غير متوافق'), fmt(cadArea, 2) + ' م²', fmt(target, 2) + ' م²', diffTxt, fedTxt, why);
+    el('v-all').innerHTML = rowsHtml;
 
     // would another drawing unit match?
-    if (!ok) {
+    if (!allOk) {
       var best = null;
       d.shapes.forEach(function (s) { CANDS.forEach(function (c) {
-        var p = Math.abs(s.area * c[0] * c[0] - target) / target * 100;
+        var p = Math.min.apply(null, T.map(function (t) { return Math.abs(s.area * c[0] * c[0] - t.m) / t.m * 100; }));
         if (!best || p < best.p) best = { k: c[0], n: c[1], p: p };
       }); });
       if (best && best.k !== k && best.p <= tol) {
